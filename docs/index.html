@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PipelineCopilot — live demo</title>
+<style>
+:root{--bg:#f6f7f9;--c:#fff;--tx:#14171c;--mu:#5b6573;--bd:#e2e6ec;--a:#2563eb;--at:#fff;--w:#b45309;--ok:#15803d}
+@media(prefers-color-scheme:dark){:root{--bg:#0d1117;--c:#161b22;--tx:#e6edf3;--mu:#8b949e;--bd:#30363d;--a:#58a6ff;--at:#0d1117;--w:#f0a14a;--ok:#3fb950}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+.w{max-width:1000px;margin:0 auto;padding:18px 16px 40px}h1{font-size:22px;margin:0}p.s{color:var(--mu);margin:2px 0 12px}
+.note{background:var(--c);border:1px solid var(--bd);border-left:4px solid var(--a);border-radius:8px;padding:10px 14px;margin-bottom:12px;color:var(--mu);font-size:13px}
+.c{background:var(--c);border:1px solid var(--bd);border-radius:10px;padding:14px;margin-bottom:12px}h2{font-size:14px;margin:0 0 8px}
+textarea,select{width:100%;background:var(--bg);color:var(--tx);border:1px solid var(--bd);border-radius:6px;padding:8px;font:13px ui-monospace,Menlo,monospace}
+button{background:var(--a);color:var(--at);border:0;border-radius:6px;padding:8px 14px;font:inherit;cursor:pointer;margin:6px 6px 0 0}
+button:disabled{opacity:.5;cursor:not-allowed}button.s{background:transparent;color:var(--a);border:1px solid var(--bd)}
+pre{overflow:auto;background:var(--bg);padding:10px;border-radius:6px;font-size:12px;margin:6px 0 0}
+table{border-collapse:collapse;font-size:12px}td,th{border:1px solid var(--bd);padding:4px 8px;text-align:left;white-space:nowrap}.ov{overflow:auto}
+.wn{color:var(--w)}.st{font-size:12px;padding:2px 9px;border-radius:99px;border:1px solid var(--bd);color:var(--mu);margin-left:8px;vertical-align:middle}.st.ok{color:var(--ok);border-color:var(--ok)}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}.row>*{flex:0 0 auto}.hint{color:var(--mu);font-size:12px}
+</style></head><body><div class="w">
+<h1>PipelineCopilot <span id="st" class="st">Loading engine…</span></h1>
+<p class="s">Describe a pipeline, review the spec, run it, export the code · by Divith Raju, AI Engineer Team Lead</p>
+<div class="note"><b>Live demo.</b> This page runs DuckDB in your browser (WebAssembly). Your data never leaves this page. The AI spec generator needs the backend (see the repository), so here you pick a preset request and edit the spec yourself. Everything after that (validation, SQL compiler, sandbox run, quality report, code export) is the same logic as the full app.</div>
+<div class="c"><h2>1. Data</h2>
+<div class="row"><button class="s" id="sample" disabled>Use sample orders.csv</button><span class="hint">or upload your own CSV (stays in your browser):</span><input type="file" id="file" accept=".csv"></div>
+<div id="prof" class="ov hint" style="margin-top:8px">Waiting for the engine…</div></div>
+<div class="c"><h2>2. Choose a request (presets for the sample data)</h2>
+<select id="preset"></select><p class="hint" id="reqtxt" style="margin:6px 0 0"></p></div>
+<div class="c"><h2>3. Pipeline spec (editable JSON)</h2><textarea id="spec" rows="14" spellcheck="false"></textarea>
+<button id="run" disabled>Run in sandbox</button><button class="s" id="gen">Export code</button></div>
+<div class="c"><h2>Result</h2><div id="out" class="ov hint">Nothing yet.</div></div>
+<p class="hint">Source and full app: <a href="https://github.com/divithraju/pipeline-copilot" style="color:var(--a)">github.com/divithraju/pipeline-copilot</a> · MIT License · © 2026 Divith Raju</p>
+</div>
+<script type="module">
+const SAMPLE_CSV = `order_id,customer_id,amount,status,order_date,country
+1001,C11,203.46,completed,2026-01-27,IN
+1002,C12,455.75,COMPLETED,2026-01-03,DE
+1003,C14,,completed,2026-05-14,IN
+1004,C19,119.39,Completed,2026-01-19,DE
+1005,C2,32.83,COMPLETED,2026-03-14,US
+1006,C18,161.16,COMPLETED,2026-01-19,US
+1007,C12,358.93,Completed,2026-01-20,US
+1008,C16,219.52,pending,2026-04-19,DE
+1009,C12,399.25,COMPLETED,2026-01-19,UK
+1010,C17,178.3,cancelled,2026-03-20,IN
+1011,C4,90.83,pending,2026-02-16,DE
+1012,C2,48.03,Completed,2026-05-26,UK
+1013,C11,301.24,Completed,2026-04-03,IN
+1014,C9,335.43,completed,2026-06-23,UK
+1015,C21,343.81,cancelled,2026-03-23,DE
+1016,C22,470.92,pending,2026-02-20,IN
+1017,C16,,pending,2026-02-24,US
+1018,C13,437.0,completed,2026-02-15,DE
+1019,C18,77.09,cancelled,2026-05-09,DE
+1020,C12,196.42,COMPLETED,2026-02-03,US
+1021,C5,124.33,cancelled,2026-05-06,UK
+1022,C10,,cancelled,2026-05-12,UK
+1023,C5,262.59,Completed,2026-06-22,IN
+1024,C15,392.19,Completed,2026-04-13,DE
+1025,C13,320.8,completed,2026-02-03,US
+1026,C15,176.63,completed,2026-01-01,US
+1027,C18,188.17,completed,2026-01-28,US
+1028,C20,320.86,pending,2026-05-12,DE
+1029,C4,249.15,cancelled,2026-04-16,UK
+1030,C3,377.34,pending,2026-04-27,US
+1031,C17,,Completed,2026-03-05,IN
+1032,C25,489.47,completed,2026-06-28,UK
+1033,C17,91.85,COMPLETED,2026-05-18,UK
+1034,C21,407.64,COMPLETED,2026-02-27,DE
+1035,C24,107.96,cancelled,2026-03-24,IN
+1036,C1,241.4,COMPLETED,2026-06-20,UK
+1037,C15,364.33,pending,2026-03-03,US
+1038,C4,106.39,COMPLETED,2026-04-20,IN
+1039,C16,178.56,completed,2026-06-04,DE
+1040,C23,244.24,COMPLETED,2026-04-26,UK
+1041,C3,486.11,cancelled,2026-04-13,IN
+1042,C24,496.63,completed,2026-02-19,DE
+1043,C21,414.99,cancelled,2026-06-12,US
+1044,C18,20.48,completed,2026-05-24,US
+1045,C14,105.45,COMPLETED,2026-01-09,US
+1046,C10,384.2,pending,2026-03-18,DE
+1047,C5,,pending,2026-04-22,DE
+1048,C17,84.4,Completed,2026-01-28,DE
+1049,C25,11.93,COMPLETED,2026-02-05,DE
+1050,C20,282.67,pending,2026-06-17,DE
+1051,C25,284.55,COMPLETED,2026-02-09,IN
+1052,C25,231.57,completed,2026-01-15,UK
+1053,C20,307.01,COMPLETED,2026-06-09,DE
+1054,C17,244.24,COMPLETED,2026-06-17,UK
+1055,C18,109.27,cancelled,2026-02-14,IN
+1056,C13,45.55,COMPLETED,2026-04-03,US
+1057,C22,69.95,COMPLETED,2026-06-21,UK
+1058,C5,77.25,cancelled,2026-02-24,IN
+1059,C13,89.77,COMPLETED,2026-02-23,DE
+1060,C17,216.43,pending,2026-03-03,UK
+1002,C12,455.75,COMPLETED,2026-01-03,DE
+1022,C10,,cancelled,2026-05-12,UK
+1036,C1,241.4,COMPLETED,2026-06-20,UK
+1030,C3,377.34,pending,2026-04-27,US
+1029,C4,249.15,cancelled,2026-04-16,UK
+1046,C10,384.2,pending,2026-03-18,DE`;
+//<core>
+const IDENT=/^[A-Za-z_][A-Za-z0-9_]{0,63}$/;
+const BAD=/(;|--|\/\*|\b(select|drop|delete|insert|update|attach|detach|copy|install|load|pragma|create|alter|export|import|call|set|glob|getenv|system|read_\w+|http\w*|union|with)\b)/i;
+const CASTS=["INTEGER","BIGINT","DOUBLE","DECIMAL(18,2)","VARCHAR","DATE","TIMESTAMP","BOOLEAN"];
+const q=id=>'"'+id.replace(/"/g,'""')+'"';
+function validate(p){
+ const e=[],id=(v,w)=>{if(typeof v!=="string"||!IDENT.test(v))e.push("invalid identifier in "+w+": "+JSON.stringify(v))},
+ ex=(v,w)=>{if(typeof v!=="string"||v.length>500||BAD.test(v))e.push("unsafe or invalid expression in "+w+": "+JSON.stringify(v))},
+ ids=(a,w)=>{if(!Array.isArray(a)||!a.length)e.push(w+" must be a non-empty list");else a.forEach(x=>id(x,w))};
+ if(!p||typeof p!=="object")return["spec must be a JSON object"];
+ id(p.name,"name");
+ if(!Array.isArray(p.steps)||p.steps.length<1||p.steps.length>20)return e.concat("steps must be a list of 1 to 20 steps");
+ p.steps.forEach((s,i)=>{const w="step "+(i+1)+" ("+(s&&s.type)+")";
+  switch(s&&s.type){
+   case"filter":ex(s.expr,w);break;
+   case"select":ids(s.columns,w);break;
+   case"rename":if(!s.mapping||typeof s.mapping!=="object"||!Object.keys(s.mapping).length)e.push(w+": mapping required");else for(const[a,b]of Object.entries(s.mapping)){id(a,w);id(b,w)}break;
+   case"cast":id(s.column,w);if(!CASTS.includes(s.to))e.push(w+": 'to' must be one of "+CASTS.join(", "));break;
+   case"derive":id(s.name,w);ex(s.expr,w);break;
+   case"dedupe":ids(s.keys,w);if(s.order_by)ex(s.order_by,w);break;
+   case"aggregate":if(!Array.isArray(s.group_by))e.push(w+": group_by must be a list");else s.group_by.forEach(x=>id(x,w));
+    if(!Array.isArray(s.metrics)||!s.metrics.length)e.push(w+": metrics required");else s.metrics.forEach(m=>{id(m&&m.name,w);ex(m&&m.expr,w)});break;
+   default:e.push(w+": unknown step type")}});
+ return e}
+function compileSql(p){
+ const ctes=["s0 AS (SELECT * FROM src)"];let prev="s0";
+ p.steps.forEach((s,i)=>{const n="s"+(i+1);let b;
+  if(s.type==="filter")b=`SELECT * FROM ${prev} WHERE ${s.expr}`;
+  else if(s.type==="select")b=`SELECT ${s.columns.map(q).join(", ")} FROM ${prev}`;
+  else if(s.type==="rename")b=`SELECT * EXCLUDE (${Object.keys(s.mapping).map(q).join(", ")}), ${Object.entries(s.mapping).map(([a,c])=>`${q(a)} AS ${q(c)}`).join(", ")} FROM ${prev}`;
+  else if(s.type==="cast")b=`SELECT * REPLACE (CAST(${q(s.column)} AS ${s.to}) AS ${q(s.column)}) FROM ${prev}`;
+  else if(s.type==="derive")b=`SELECT *, (${s.expr}) AS ${q(s.name)} FROM ${prev}`;
+  else if(s.type==="dedupe")b=`SELECT * FROM ${prev} QUALIFY row_number() OVER (PARTITION BY ${s.keys.map(q).join(", ")}${s.order_by?" ORDER BY "+s.order_by:""}) = 1`;
+  else{const sel=s.group_by.map(q).concat(s.metrics.map(m=>`(${m.expr}) AS ${q(m.name)}`));
+   b=`SELECT ${sel.join(", ")} FROM ${prev}${s.group_by.length?" GROUP BY "+s.group_by.map(q).join(", "):""}`}
+  ctes.push(`${n} AS (${b})`);prev=n});
+ return "WITH "+ctes.join(",\n")+`\nSELECT * FROM ${prev}`}
+const READERS={csv:"read_csv",parquet:"read_parquet",json:"read_json_auto"};
+function pythonScript(p){
+ const fmt=(p.source&&p.source.format)||"csv",reader=READERS[fmt],extra=fmt==="csv"?", header=true":"",path=(p.source&&p.source.path)||"data.csv";
+ return `"""Generated by PipelineCopilot: ${p.name}
+Usage: python ${p.name}.py [source_file] [output.parquet]
+"""
+import sys
+import duckdb
+
+SOURCE = sys.argv[1] if len(sys.argv) > 1 else "${path}"
+OUT = sys.argv[2] if len(sys.argv) > 2 else "${p.name}.parquet"
+SQL = """
+${compileSql(p)}
+"""
+
+con = duckdb.connect()
+con.execute("CREATE TABLE src AS SELECT * FROM ${reader}(?${extra})", [SOURCE])
+con.execute(f"COPY ({SQL}) TO '{OUT}' (FORMAT PARQUET)")
+rows = con.execute(f"SELECT count(*) FROM read_parquet('{OUT}')").fetchone()[0]
+print(f"wrote {OUT}: {rows} rows")
+`}
+function airflowDag(p){
+ return `from datetime import datetime
+from airflow import DAG
+from airflow.operators.bash import BashOperator
+
+with DAG("${p.name}", start_date=datetime(2026, 1, 1), schedule="@daily", catchup=False) as dag:
+    BashOperator(
+        task_id="run_${p.name}",
+        bash_command="python /opt/pipelines/${p.name}.py {{ var.value.source_path }} /opt/out/${p.name}.parquet",
+    )
+`}
+//</core>
+const SRC={path:"examples/orders.csv",format:"csv"};
+const PRESETS=[
+ {label:"Monthly revenue by country (dedupe → filter → derive → aggregate)",req:"Remove duplicate orders, keep completed ones, and show monthly revenue by country.",
+  spec:{name:"monthly_revenue",source:SRC,steps:[{type:"dedupe",keys:["order_id"]},{type:"filter",expr:"lower(status) = 'completed' AND amount IS NOT NULL"},{type:"derive",name:"month",expr:"strftime(CAST(order_date AS DATE), '%Y-%m')"},{type:"aggregate",group_by:["country","month"],metrics:[{name:"revenue",expr:"sum(amount)"},{name:"orders",expr:"count(*)"}]}]}},
+ {label:"Customer spend summary",req:"Deduplicate orders, ignore cancelled ones, and total spend and order count per customer.",
+  spec:{name:"customer_spend",source:SRC,steps:[{type:"dedupe",keys:["order_id"]},{type:"filter",expr:"lower(status) <> 'cancelled' AND amount IS NOT NULL"},{type:"aggregate",group_by:["customer_id"],metrics:[{name:"total_spend",expr:"sum(amount)"},{name:"orders",expr:"count(*)"}]}]}},
+ {label:"Clean and standardise orders",req:"Standardise status to lower case, make amount a 2-decimal number, rename customer_id to customer, and keep only the useful columns.",
+  spec:{name:"clean_orders",source:SRC,steps:[{type:"dedupe",keys:["order_id"]},{type:"cast",column:"amount",to:"DECIMAL(18,2)"},{type:"derive",name:"status_clean",expr:"lower(status)"},{type:"rename",mapping:{customer_id:"customer"}},{type:"select",columns:["order_id","customer","amount","status_clean","order_date","country"]}]}}];
+const $=i=>document.getElementById(i);
+const esc=s=>String(s).replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+const show=h=>{$("out").className="ov";$("out").innerHTML=h};
+const fail=m=>show('<span class="wn">'+esc(m)+'</span>');
+let db,conn,n=0,ready=false,hasData=false;
+const num=v=>typeof v==="bigint"?Number(v):v;
+async function one(sql){const r=await conn.query(sql);return r.schema.fields.map((f,i)=>num(r.getChildAt(i).get(0)))}
+async function rows(sql){const r=await conn.query(sql);const out=[];for(let i=0;i<r.numRows;i++)out.push(r.schema.fields.map((f,c)=>{const v=r.getChildAt(c).get(i);return v===null?null:num(v)}));return out}
+function setBusy(){$("run").disabled=!(ready&&hasData);$("sample").disabled=!ready}
+async function init(){
+ try{
+  const duckdb=await import("https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.29.0/+esm");
+  const bundle=await duckdb.selectBundle(duckdb.getJsDelivrBundles());
+  const url=URL.createObjectURL(new Blob([`importScripts("${bundle.mainWorker}");`],{type:"text/javascript"}));
+  db=new duckdb.AsyncDuckDB(new duckdb.ConsoleLogger(duckdb.LogLevel.WARNING),new Worker(url));
+  await db.instantiate(bundle.mainModule,bundle.pthreadWorker);URL.revokeObjectURL(url);
+  conn=await db.connect();ready=true;$("st").textContent="Engine ready";$("st").className="st ok";
+  await loadCsv(SAMPLE_CSV,"sample orders.csv");
+ }catch(e){$("st").textContent="Engine failed";$("prof").innerHTML='<span class="wn">Could not load DuckDB-WASM ('+esc(e.message)+'). Check your internet connection and reload.</span>'}
+ setBusy()}
+async function loadCsv(text,label){
+ const f="data_"+(++n)+".csv";await db.registerFileText(f,text);
+ await conn.query("DROP TABLE IF EXISTS src");
+ try{await conn.query(`CREATE TABLE src AS SELECT * FROM read_csv_auto('${f}', header=true)`)}catch(e){hasData=false;$("prof").innerHTML='<span class="wn">Could not read that CSV: '+esc(e.message)+'</span>';setBusy();return}
+ hasData=true;const total=(await one("SELECT count(*) FROM src"))[0],cols=await rows("SELECT name,type FROM pragma_table_info('src')");
+ let h=`<b>${esc(label)}</b>: ${total} rows, ${cols.length} columns<br><table><tr><th>column</th><th>type</th><th>null rate</th><th>distinct</th></tr>`;
+ for(const[c,t]of cols){const[nn,d]=await one(`SELECT count(*) - count(${q(c)}), count(DISTINCT ${q(c)}) FROM src`);
+  h+=`<tr><td>${esc(c)}</td><td>${esc(t)}</td><td>${total?(nn/total*100).toFixed(1):0}%</td><td>${d}</td></tr>`}
+ $("prof").innerHTML=h+"</table>";setBusy()}
+async function qualityHtml(sp,rowsIn){
+ const cols=(await rows("SELECT name FROM pragma_table_info('out')")).map(r=>r[0]),out=(await one("SELECT count(*) FROM out"))[0],warn=[],nulls={};
+ if(cols.length&&out){const v=await one(`SELECT ${cols.map(c=>`sum(CASE WHEN ${q(c)} IS NULL THEN 1 ELSE 0 END)`).join(", ")} FROM out`);cols.forEach((c,i)=>nulls[c]=+(v[i]/out).toFixed(4))}
+ if(!out)warn.push("Output is empty. Check your filters.");
+ for(const[c,r]of Object.entries(nulls))if(r>.2)warn.push(`Column '${c}' is ${Math.round(r*100)}% null in the output.`);
+ for(const s of sp.steps)if(s.type==="dedupe"&&s.keys.every(k=>cols.includes(k))){
+  const d=(await one(`SELECT count(*) - count(DISTINCT (${s.keys.map(q).join(", ")})) FROM out`))[0];if(d)warn.push(`${d} duplicate rows remain on keys ${JSON.stringify(s.keys)}.`)}
+ return `<h2>Quality report</h2><pre>${esc(JSON.stringify({rows_in:rowsIn,rows_out:out,rows_dropped_pct:rowsIn?+((rowsIn-out)/rowsIn*100).toFixed(2):0,null_rate:nulls,warnings:warn},null,1))}</pre>`}
+async function run(){
+ let sp;try{sp=JSON.parse($("spec").value)}catch(e){return fail("Invalid JSON: "+e.message)}
+ const errs=validate(sp);if(errs.length)return fail("Spec rejected:\n• "+errs.join("\n• "));
+ try{
+  const sql=compileSql(sp),rowsIn=(await one("SELECT count(*) FROM src"))[0];
+  await conn.query("DROP TABLE IF EXISTS out");await conn.query(`CREATE TABLE out AS ${sql}`);
+  const cols=(await rows("SELECT name FROM pragma_table_info('out')")).map(r=>r[0]);
+  const prev=await rows(`SELECT ${cols.map(c=>`CAST(${q(c)} AS VARCHAR) AS ${q(c)}`).join(", ")} FROM out LIMIT 20`);
+  show(await qualityHtml(sp,rowsIn)+`<h2>Preview (first 20 rows)</h2><table><tr>${cols.map(c=>`<th>${esc(c)}</th>`).join("")}</tr>${prev.map(r=>`<tr>${r.map(v=>`<td>${v===null?"<i>null</i>":esc(v)}</td>`).join("")}</tr>`).join("")}</table><h2>SQL</h2><pre>${esc(sql)}</pre>`)
+ }catch(e){fail("Pipeline failed: "+e.message)}}
+function gen(){let sp;try{sp=JSON.parse($("spec").value)}catch(e){return fail("Invalid JSON: "+e.message)}
+ const errs=validate(sp);if(errs.length)return fail("Spec rejected:\n• "+errs.join("\n• "));
+ show(`<h2>Python script</h2><pre>${esc(pythonScript(sp))}</pre><h2>Airflow DAG</h2><pre>${esc(airflowDag(sp))}</pre>`)}
+PRESETS.forEach((p,i)=>{const o=document.createElement("option");o.value=i;o.textContent=p.label;$("preset").appendChild(o)});
+function pick(){const p=PRESETS[$("preset").value];$("reqtxt").textContent='Request: “'+p.req+'”';$("spec").value=JSON.stringify(p.spec,null,2)}
+$("preset").onchange=pick;pick();
+$("run").onclick=run;$("gen").onclick=gen;$("sample").onclick=()=>loadCsv(SAMPLE_CSV,"sample orders.csv");
+$("file").onchange=e=>{const f=e.target.files[0];if(!f)return;if(f.size>10*1024*1024)return fail("File larger than 10 MB");const r=new FileReader();r.onload=()=>loadCsv(r.result,f.name);r.readAsText(f)};
+init();
+</script></body></html>

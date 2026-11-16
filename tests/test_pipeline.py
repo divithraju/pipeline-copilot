@@ -65,3 +65,20 @@ def test_api_run_and_codegen():
     assert "duckdb" in g["python"] and "DAG" in g["airflow_dag"]
     bad = c.post("/api/run", json={**SPEC, "steps": [{"type": "filter", "expr": "nope > 1"}]})
     assert bad.status_code == 422
+
+
+def test_rename_and_select_reorder():
+    spec = {**SPEC, "steps": [
+        {"type": "rename", "mapping": {"customer_id": "customer", "amount": "total"}},
+        {"type": "select", "columns": ["order_id", "customer", "total"]}]}
+    res = engine.run_pipeline(Pipeline.model_validate(spec))
+    assert res["columns"] == ["order_id", "customer", "total"] and res["quality"]["rows_out"] == 66
+
+
+def test_all_step_types_run():
+    spec = {**SPEC, "steps": [
+        {"type": "cast", "column": "amount", "to": "DECIMAL(18,2)"},
+        {"type": "derive", "name": "status_clean", "expr": "lower(status)"},
+        {"type": "dedupe", "keys": ["order_id"], "order_by": "order_date DESC"},
+        {"type": "select", "columns": ["order_id", "status_clean", "amount"]}]}
+    assert engine.run_pipeline(Pipeline.model_validate(spec))["quality"]["rows_out"] == 60

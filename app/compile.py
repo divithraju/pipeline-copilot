@@ -15,7 +15,10 @@ def compile_sql(p: Pipeline) -> str:
         elif s.type == "select":
             body = f"SELECT {', '.join(q(c) for c in s.columns)} FROM {prev}"
         elif s.type == "rename":
-            body = f"SELECT * RENAME ({', '.join(f'{q(a)} AS {q(b)}' for a, b in s.mapping.items())}) FROM {prev}"
+            # EXCLUDE + alias works on every DuckDB version (SELECT * RENAME needs a newer release);
+            # renamed columns move to the end, use a `select` step to reorder.
+            body = (f"SELECT * EXCLUDE ({', '.join(q(a) for a in s.mapping)}), "
+                    f"{', '.join(f'{q(a)} AS {q(b)}' for a, b in s.mapping.items())} FROM {prev}")
         elif s.type == "cast":
             body = f"SELECT * REPLACE (CAST({q(s.column)} AS {s.to}) AS {q(s.column)}) FROM {prev}"
         elif s.type == "derive":

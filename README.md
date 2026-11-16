@@ -8,6 +8,9 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 ![Python](https://img.shields.io/badge/Python-3.12-blue) ![DuckDB](https://img.shields.io/badge/Engine-DuckDB-yellow) ![FastAPI](https://img.shields.io/badge/API-FastAPI-009688)
 
+### 🚀 [**Open the Live Demo**](https://divithraju.github.io/pipeline-copilot/)
+*Runs entirely in your browser (DuckDB-WASM). Pick a preset, edit the spec, run it, export the code.*
+
 </div>
 
 ## Author
@@ -40,7 +43,7 @@ flowchart LR
 | Repair loop | Invalid LLM output is fed back once for correction |
 | Quality report | Rows in/out, % dropped, null rates, leftover duplicates, warnings |
 | Export | Standalone Python script (DuckDB → Parquet) and an Airflow DAG |
-| UI | Upload, describe, edit spec, run, view SQL and preview, export |
+| UI | Upload, describe, edit spec, run, view SQL and preview, export. Full app (`web/`) or the browser-only [live demo](https://divithraju.github.io/pipeline-copilot/) (`docs/index.html`, preset specs, no backend) |
 
 ## Quick start
 ```bash
@@ -56,6 +59,16 @@ uvicorn app.main:app --reload
 No API key? Click **Load example spec**, then **Run on sandbox**: everything except spec generation works offline.
 
 Docker: `docker build -t pipeline-copilot . && docker run -p 8000:8000 --env-file .env pipeline-copilot`
+
+## Live demo vs full app
+| | Live demo (GitHub Pages) | Full app (`uvicorn`) |
+|---|---|---|
+| Engine | DuckDB-WASM in your browser | DuckDB on the server |
+| Data | Sample or your CSV, never uploaded | Upload to your own server |
+| AI spec generation | Preset specs only | Yes, with `ANTHROPIC_API_KEY` |
+| Validation, compiler, quality report, code export | Same logic (verified to produce identical SQL) | Reference implementation |
+
+Note: the `rename` step moves renamed columns to the end of the table; add a `select` step to reorder.
 
 ## Example
 Request: *"Remove duplicate orders, keep completed ones, and show monthly revenue by country."*
@@ -81,7 +94,7 @@ Request: *"Remove duplicate orders, keep completed ones, and show monthly revenu
 ```bash
 DATA_DIR=data pytest -q
 ```
-13 tests cover compilation, dedupe correctness, unsafe-expression rejection, path traversal, the planner repair loop, the API, and runnable generated code.
+15 tests cover compilation, dedupe correctness, unsafe-expression rejection, path traversal, the planner repair loop, the API, and runnable generated code.
 
 ## Status
 | Component | Status |
