@@ -14,7 +14,7 @@
 </div>
 
 ## Author
-**Divith Raju** — AI Engineer Team Lead · 9.5 years in data engineering · LinkedIn Top Voice in Data Engineering
+**Divith Raju** — AI Engineering Team Lead · EX-Data engineer · LinkedIn Top Voice in Data Engineering
 GitHub [@divithraju](https://github.com/divithraju) · Open-source: [`friendlyetl`](https://pypi.org/project/friendlyetl/)
 
 ## The problem
