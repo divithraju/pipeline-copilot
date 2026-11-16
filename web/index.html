@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PipelineCopilot</title>
+<style>
+:root{--bg:#f6f7f9;--c:#fff;--tx:#14171c;--mu:#5b6573;--bd:#e2e6ec;--a:#2563eb;--at:#fff;--w:#b45309}
+@media(prefers-color-scheme:dark){:root{--bg:#0d1117;--c:#161b22;--tx:#e6edf3;--mu:#8b949e;--bd:#30363d;--a:#58a6ff;--at:#0d1117;--w:#f0a14a}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.5 system-ui,sans-serif}
+.w{max-width:1000px;margin:0 auto;padding:18px 16px 40px}h1{font-size:22px;margin:0}p.s{color:var(--mu);margin:2px 0 14px}
+.c{background:var(--c);border:1px solid var(--bd);border-radius:10px;padding:14px;margin-bottom:12px}h2{font-size:14px;margin:0 0 8px}
+textarea,input[type=text]{width:100%;background:var(--bg);color:var(--tx);border:1px solid var(--bd);border-radius:6px;padding:8px;font:13px ui-monospace,monospace}
+button{background:var(--a);color:var(--at);border:0;border-radius:6px;padding:8px 14px;font:inherit;cursor:pointer;margin:6px 6px 0 0}
+button.s{background:transparent;color:var(--a);border:1px solid var(--bd)}pre{overflow:auto;background:var(--bg);padding:10px;border-radius:6px;font-size:12px;margin:6px 0 0}
+table{border-collapse:collapse;font-size:12px}td,th{border:1px solid var(--bd);padding:4px 8px;text-align:left}.ov{overflow:auto}.wn{color:var(--w)}
+</style></head><body><div class="w">
+<h1>PipelineCopilot</h1><p class="s">Describe a data pipeline in plain English. Review the spec, run it safely, export the code. By Divith Raju.</p>
+<div class="c"><h2>1. Upload data (.csv / .parquet / .json, ≤10 MB)</h2><input type="file" id="f"><pre id="prof">No file yet.</pre></div>
+<div class="c"><h2>2. Describe the pipeline</h2><textarea id="req" rows="3" placeholder="e.g. Remove duplicate orders, keep completed orders, and show monthly revenue by country"></textarea>
+<button id="plan">Generate spec (needs ANTHROPIC_API_KEY)</button><button class="s" id="ex">Load example spec</button></div>
+<div class="c"><h2>3. Pipeline spec (editable JSON)</h2><textarea id="spec" rows="12"></textarea><button id="run">Run on sandbox</button><button class="s" id="gen">Export code</button></div>
+<div class="c"><h2>Result</h2><div id="out" class="ov">Nothing yet.</div></div>
+</div><script>
+var $=function(i){return document.getElementById(i)},src=null,fmt="csv";
+var EX={name:"monthly_revenue",source:{path:"examples/orders.csv",format:"csv"},steps:[
+{type:"dedupe",keys:["order_id"]},{type:"filter",expr:"lower(status) = 'completed' AND amount IS NOT NULL"},
+{type:"derive",name:"month",expr:"strftime(CAST(order_date AS DATE), '%Y-%m')"},
+{type:"aggregate",group_by:["country","month"],metrics:[{name:"revenue",expr:"sum(amount)"},{name:"orders",expr:"count(*)"}]}]};
+function esc(s){return String(s).replace(/[&<>]/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;"}[c]})}
+async function call(p,b,form){var r=await fetch(p,form?{method:"POST",body:b}:{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(b)});
+ var j=await r.json();if(!r.ok)throw new Error(typeof j.detail==="string"?j.detail:JSON.stringify(j.detail));return j}
+function err(e){$("out").innerHTML='<span class="wn">'+esc(e.message)+'</span>'}
+$("f").onchange=async function(e){try{var fd=new FormData();fd.append("file",e.target.files[0]);var j=await call("/api/upload",fd,1);
+ src=j.source_path;fmt=j.format;$("prof").textContent="Uploaded as "+src+"\n"+JSON.stringify(j.profile,null,1)}catch(x){err(x)}};
+$("ex").onclick=function(){$("spec").value=JSON.stringify(EX,null,2)};
+$("plan").onclick=async function(){if(!src)return err(Error("Upload a file first"));
+ try{var j=await call("/api/plan",{request:$("req").value,source_path:src,format:fmt});$("spec").value=JSON.stringify(j,null,2)}catch(x){err(x)}};
+$("run").onclick=async function(){try{var j=await call("/api/run",JSON.parse($("spec").value));
+ var h='<h2>Quality</h2><pre>'+esc(JSON.stringify(j.quality,null,1))+'</pre><h2>Preview</h2><table><tr>'+j.columns.map(function(c){return"<th>"+esc(c)+"</th>"}).join("")+"</tr>"+
+ j.preview.map(function(r){return"<tr>"+r.map(function(v){return"<td>"+esc(v)+"</td>"}).join("")+"</tr>"}).join("")+"</table><h2>SQL</h2><pre>"+esc(j.sql)+"</pre>";$("out").innerHTML=h}catch(x){err(x)}};
+$("gen").onclick=async function(){try{var j=await call("/api/codegen",JSON.parse($("spec").value));$("out").innerHTML="<h2>Python script</h2><pre>"+esc(j.python)+"</pre><h2>Airflow DAG</h2><pre>"+esc(j.airflow_dag)+"</pre>"}catch(x){err(x)}};
+</script></body></html>
